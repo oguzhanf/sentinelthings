@@ -3,48 +3,51 @@ let timewindow = ago(24h);
 let failedBehaviorAnalyticsLogons = (BehaviorAnalytics
 | where ActivityType has "FailedLogOn"
 | where TimeGenerated >= timewindow
-| summarize count() by UserName, 
-            ActionType,    
-            EventSource, 
-            UserPrincipalName,
-            tostring(UsersInsights),
-            ActivityType,
+| summarize count() by 
+            ["BA_UserName"]=UserName, 
+            ["BA_ActionType"]=ActionType,    
+            ["BA_EventSource"]=EventSource, 
+            ["BA_UserPrincipalName"]=UserPrincipalName,
+            ["BA_UserInsights"]=tostring(UsersInsights),
+            ["BA_ActivityType"]=ActivityType,
             ["Evidence"]=tostring(ActivityInsights),
-            SourceIPAddress,
-            SourceIPLocation,
-            SourceDevice,
-            ["Device"]=tostring(DevicesInsights)
+            ["BA_SourceIP"]=SourceIPAddress,
+            ["BA_SourceLoc"]=SourceIPLocation,
+            ["BA_SourceDevice"]=SourceDevice,
+            ["BA_Device"]=tostring(DevicesInsights)
 | where count_ >= failcount
 );
 let failedSigninLogs= (SigninLogs
 | where ResultDescription startswith "Invalid username or password" or ResultDescription startswith "Invalid password"
 | where TimeGenerated >= timewindow
-| summarize count() by ["SI_UserPrincipalName"]=UserPrincipalName,
-             ["SI_Result"]=ResultSignature,
-             ["SI_AppDisplayName"]=AppDisplayName,
-             ["SI_AlternateSignInName"]=AlternateSignInName,
-             ["SI_ClientAppUsed"]=ClientAppUsed,
-             ["SI_DeviceAADSignin"]=tostring(DeviceDetail),
-             ["SI_IsInteractive"]=IsInteractive,
-             ["SI_IPAddress"]=IPAddress,
-             ["SI_LocationAADSignin"]=tostring(LocationDetails),
-             ["SI_SignInIdentifier"]=SignInIdentifier,
-             ["SI_UserType"]=UserType,
-             ["SI_UserDisplayName"]=UserDisplayName                        
+| summarize count() by 
+            ["SI_UserPrincipalName"]=UserPrincipalName,
+            ["SI_Result"]=ResultSignature,
+            ["SI_AppDisplayName"]=AppDisplayName,
+            ["SI_AlternateSignInName"]=AlternateSignInName,
+            ["SI_ClientAppUsed"]=ClientAppUsed,
+            ["SI_DeviceAADSignin"]=tostring(DeviceDetail),
+            ["SI_IsInteractive"]=IsInteractive,
+            ["SI_IPAddress"]=IPAddress,
+            ["SI_LocationAADSignin"]=tostring(LocationDetails),
+            ["SI_SignInIdentifier"]=SignInIdentifier,
+            ["SI_UserType"]=UserType,
+            ["SI_UserDisplayName"]=UserDisplayName                        
 | where count_ >= failcount
 );
 let failedDeviceLogonEvents=(DeviceLogonEvents
 | where ActionType has "LogonFailed"
 | where TimeGenerated >= timewindow
-| summarize count() by AccountName
+| summarize count() by 
+            ["DLE_AccountName"]=AccountName,
+            ["DLE_AccountDomain"]=AccountDomain,
+            ["DLE_ActionType"]=ActionType,
+            ["DLE_DeviceName"]=DeviceName,
+            ["DLE_LogonType"]=LogonType
 | where count_ >= failcount
-| project AccountName
 );
 failedBehaviorAnalyticsLogons
 | union failedSigninLogs
 | union failedDeviceLogonEvents
 | extend failedUser = iff (isnotempty(UserName), UserName,iff(isnotempty(UserPrincipalName), UserPrincipalName,iff(isnotempty(AccountName), AccountName, "")) )
 | extend failureSource = iff (isnotempty(UserName), "BehaviorAnalytics",iff(isnotempty(UserPrincipalName), "AADSigninLogs",iff(isnotempty(AccountName), "DeviceLogonEvents", "")) )
-
-
-
