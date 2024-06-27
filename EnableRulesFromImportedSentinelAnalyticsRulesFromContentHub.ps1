@@ -45,7 +45,8 @@ foreach ($template in $ruleTemplates) {
         New-AzSentinelAlertRule @params
         $enabledCount++
     } catch {
-        Write-Output "Failed to create rule $ruleName because one of the referenced tables does not exist in the schema."
+        Write-Output "Failed to create rule $ruleName."
+        Write-Output $_
         $failedCount++
         $failedRules += $ruleName
     }
