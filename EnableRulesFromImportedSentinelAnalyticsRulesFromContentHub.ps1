@@ -1,4 +1,11 @@
-
+<#
+    .SYNOPSIS
+        This script will enumerate all alert rule templates in a given workspace with Sentinel deployed and 
+        and enable them. Rules created with this script will show up as custom content. 
+    .NOTES
+        AUTHOR: Oguzhan Filizlibay
+        LASTEDIT: 28 June 2024
+#>
 
 $resourceGroupName = ""
 $workspaceName = ""
