@@ -1,10 +1,12 @@
+
+# Posts a csv file as data into a custom log table
 # Define your workspace ID and primary key
-$workspaceId = "60749e46-6311-4cb3-a881-e2637dc54f89"
-$workspaceKey = "zmT/OhoexMrVhvPAK6Rn7hLaYM2RJsYeRJ/O/UDZgq+QQEVCvxOa5iJXyVT4PzelHJIqTJzLc2tBjMFqj/XVsw=="
-$logType = "NGINX_Sampledata_CL"  # Custom log table name; '_CL' is appended automatically
+$workspaceId = ""
+$workspaceKey = ""
+$logType = "customLogTable_CL"  # Custom log table name; '_CL' is appended automatically
 
 # Path to your CSV file
-$filePath = "C:\Users\oguzhanf\OneDrive - Microsoft\Desktop\etisalat asim parsers\NGINX_Sampledata(sanitized).csv"
+$filePath = "file.csv"
 
 # Import the CSV file and convert to JSON
 $csvData = Import-Csv -Path $filePath
