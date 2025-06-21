@@ -1,0 +1,39 @@
+// Uncommon outbound connections from server-class devices
+let BaselineStart = ago(7d);               // shorter baseline for quick tests
+let BaselineEnd   = ago(1h);               // leave the last hour out of baseline
+let AnomalyWindow = ago(1h);               // detect anomalies in that hour
+let Servers = DeviceInfo
+| where Timestamp >= BaselineEnd
+| where OSPlatform startswith ""WindowsServer"" or OSPlatform startswith ""Linux""
+| summarize by DeviceId;
+let BaselineDest = DeviceNetworkEvents
+| where Timestamp between (BaselineStart .. BaselineEnd)
+| where DeviceId in (Servers)
+| extend Dest = coalesce(RemoteUrl,RemoteIP)
+| where ActionType in (""ConnectionSuccess"",""ConnectionSuccessAggregatedReport"")
+| summarize by DeviceId,Dest;
+let HourlySeries = DeviceNetworkEvents
+| where Timestamp >= BaselineStart
+| where DeviceId in (Servers)
+| extend Dest = coalesce(RemoteUrl,RemoteIP)
+| where ActionType in (""ConnectionSuccess"",""ConnectionSuccessAggregatedReport"")
+| make-series C = count() on Timestamp from BaselineStart to now() step 1h by DeviceId,Dest;
+let Anomalies = HourlySeries
+| extend (IsAnomaly,Score,Expected) = series_decompose_anomalies(C)
+| mv-expand Timestamp,C,IsAnomaly,Score,Expected
+| where IsAnomaly == 1 and Timestamp >= AnomalyWindow
+| extend Dest = tostring(Dest);
+Anomalies
+| join kind = leftanti BaselineDest on DeviceId,Dest        // comment this line to debug
+| join kind = inner (
+    DeviceInfo
+    | where Timestamp >= AnomalyWindow
+    | project DeviceId,DeviceName,OSPlatform) on DeviceId
+| project Timestamp,
+          DeviceName,
+          OSPlatform,
+          Dest,
+          OutboundConnections = tolong(C),
+          ExpectedBaseline    = todouble(Expected),
+          AnomalyScore        = round(todouble(Score),2)
+| order by AnomalyScore desc"
