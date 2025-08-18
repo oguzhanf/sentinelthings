@@ -1,0 +1,273 @@
+{
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "tenantId": {
+            "type": "string",
+            "metadata": {
+                "description": "Azure AD Tenant ID"
+            }
+        },
+        "workspaceId": {
+            "type": "string",
+            "metadata": {
+                "description": "Log Analytics Workspace ID"
+            }
+        },
+        "workspaceKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Log Analytics Workspace Primary Key"
+            }
+        },
+        "subscriptionId": {
+            "type": "string",
+            "metadata": {
+                "description": "Office 365 Management API Subscription ID"
+            }
+        }
+    },
+    "triggers": {
+        "Recurrence": {
+            "type": "Recurrence",
+            "recurrence": {
+                "frequency": "Hour",
+                "interval": 1,
+                "timeZone": "UTC"
+            },
+            "metadata": {
+                "description": "Trigger every hour to check for new Copilot audit logs"
+            }
+        }
+    },
+    "actions": {
+        "Initialize_StartTime": {
+            "type": "InitializeVariable",
+            "inputs": {
+                "variables": [
+                    {
+                        "name": "StartTime",
+                        "type": "string",
+                        "value": "@{addHours(utcNow(), -1)}"
+                    }
+                ]
+            },
+            "metadata": {
+                "description": "Set start time to 1 hour ago"
+            }
+        },
+        "Initialize_EndTime": {
+            "type": "InitializeVariable",
+            "inputs": {
+                "variables": [
+                    {
+                        "name": "EndTime",
+                        "type": "string",
+                        "value": "@{utcNow()}"
+                    }
+                ]
+            },
+            "runAfter": {
+                "Initialize_StartTime": ["Succeeded"]
+            },
+            "metadata": {
+                "description": "Set end time to current time"
+            }
+        },
+        "Get_Access_Token": {
+            "type": "Http",
+            "inputs": {
+                "method": "POST",
+                "uri": "https://login.microsoftonline.com/@{parameters('tenantId')}/oauth2/v2.0/token",
+                "headers": {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                "body": "grant_type=client_credentials&scope=https://manage.office.com/.default",
+                "authentication": {
+                    "type": "ManagedServiceIdentity"
+                }
+            },
+            "runAfter": {
+                "Initialize_EndTime": ["Succeeded"]
+            },
+            "metadata": {
+                "description": "Get access token using managed identity"
+            }
+        },
+        "Parse_Token_Response": {
+            "type": "ParseJson",
+            "inputs": {
+                "content": "@body('Get_Access_Token')",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "access_token": {
+                            "type": "string"
+                        },
+                        "token_type": {
+                            "type": "string"
+                        },
+                        "expires_in": {
+                            "type": "integer"
+                        }
+                    }
+                }
+            },
+            "runAfter": {
+                "Get_Access_Token": ["Succeeded"]
+            }
+        },
+        "Get_Copilot_Audit_Logs": {
+            "type": "Http",
+            "inputs": {
+                "method": "GET",
+                "uri": "https://manage.office.com/api/v1.0/@{parameters('tenantId')}/activity/feed/subscriptions/content?contentType=Audit.Copilot&startTime=@{variables('StartTime')}&endTime=@{variables('EndTime')}",
+                "headers": {
+                    "Authorization": "Bearer @{body('Parse_Token_Response')['access_token']}",
+                    "Content-Type": "application/json"
+                }
+            },
+            "runAfter": {
+                "Parse_Token_Response": ["Succeeded"]
+            },
+            "metadata": {
+                "description": "Retrieve Copilot audit logs from Office 365 Management API"
+            }
+        },
+        "Check_If_Logs_Available": {
+            "type": "Condition",
+            "expression": {
+                "and": [
+                    {
+                        "greater": [
+                            "@length(body('Get_Copilot_Audit_Logs'))",
+                            0
+                        ]
+                    }
+                ]
+            },
+            "actions": {
+                "For_Each_Content_URI": {
+                    "type": "Foreach",
+                    "foreach": "@body('Get_Copilot_Audit_Logs')",
+                    "actions": {
+                        "Get_Audit_Content": {
+                            "type": "Http",
+                            "inputs": {
+                                "method": "GET",
+                                "uri": "@{items('For_Each_Content_URI')['contentUri']}",
+                                "headers": {
+                                    "Authorization": "Bearer @{body('Parse_Token_Response')['access_token']}",
+                                    "Content-Type": "application/json"
+                                }
+                            }
+                        },
+                        "Parse_Audit_Content": {
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Get_Audit_Content')",
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "Id": {"type": "string"},
+                                            "CreationTime": {"type": "string"},
+                                            "Operation": {"type": "string"},
+                                            "UserId": {"type": "string"},
+                                            "UserKey": {"type": "string"},
+                                            "UserType": {"type": "integer"},
+                                            "ClientIP": {"type": "string"},
+                                            "UserAgent": {"type": "string"},
+                                            "AppId": {"type": "string"},
+                                            "AppDisplayName": {"type": "string"}
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Get_Audit_Content": ["Succeeded"]
+                            }
+                        },
+                        "Transform_And_Send_To_Sentinel": {
+                            "type": "Foreach",
+                            "foreach": "@body('Parse_Audit_Content')",
+                            "actions": {
+                                "Transform_Log_Entry": {
+                                    "type": "Compose",
+                                    "inputs": {
+                                        "TimeGenerated": "@items('Transform_And_Send_To_Sentinel')['CreationTime']",
+                                        "ActivityId": "@items('Transform_And_Send_To_Sentinel')['Id']",
+                                        "ActivityType": "@items('Transform_And_Send_To_Sentinel')['Operation']",
+                                        "UserId": "@items('Transform_And_Send_To_Sentinel')['UserId']",
+                                        "UserPrincipalName": "@items('Transform_And_Send_To_Sentinel')['UserId']",
+                                        "ClientIP": "@items('Transform_And_Send_To_Sentinel')['ClientIP']",
+                                        "UserAgent": "@items('Transform_And_Send_To_Sentinel')['UserAgent']",
+                                        "AppName": "@items('Transform_And_Send_To_Sentinel')['AppDisplayName']",
+                                        "AppId": "@items('Transform_And_Send_To_Sentinel')['AppId']",
+                                        "CopilotEventType": "@items('Transform_And_Send_To_Sentinel')['Operation']",
+                                        "TenantId": "@parameters('tenantId')",
+                                        "SourceSystem": "Office365ManagementAPI",
+                                        "AdditionalProperties": "@items('Transform_And_Send_To_Sentinel')"
+                                    }
+                                },
+                                "Create_Log_Analytics_Signature": {
+                                    "type": "Compose",
+                                    "inputs": {
+                                        "method": "POST",
+                                        "contentLength": "@length(string(outputs('Transform_Log_Entry')))",
+                                        "contentType": "application/json",
+                                        "date": "@formatDateTime(utcNow(), 'r')",
+                                        "resource": "/api/logs",
+                                        "stringToSign": "@concat('POST', '\n', string(length(string(outputs('Transform_Log_Entry')))), '\n', 'application/json', '\n', 'x-ms-date:', formatDateTime(utcNow(), 'r'), '\n', '/api/logs')",
+                                        "signature": "@base64(hmacsha256(base64(parameters('workspaceKey')), concat('POST', '\n', string(length(string(outputs('Transform_Log_Entry')))), '\n', 'application/json', '\n', 'x-ms-date:', formatDateTime(utcNow(), 'r'), '\n', '/api/logs')))"
+                                    },
+                                    "runAfter": {
+                                        "Transform_Log_Entry": ["Succeeded"]
+                                    }
+                                },
+                                "Send_To_Log_Analytics": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "method": "POST",
+                                        "uri": "https://@{parameters('workspaceId')}.ods.opinsights.azure.com/api/logs?api-version=2016-04-01",
+                                        "headers": {
+                                            "Authorization": "@concat('SharedKey ', parameters('workspaceId'), ':', outputs('Create_Log_Analytics_Signature')['signature'])",
+                                            "Content-Type": "application/json",
+                                            "Log-Type": "copilotauditlogs",
+                                            "x-ms-date": "@outputs('Create_Log_Analytics_Signature')['date']",
+                                            "time-generated-field": "TimeGenerated"
+                                        },
+                                        "body": "[@{outputs('Transform_Log_Entry')}]"
+                                    },
+                                    "runAfter": {
+                                        "Create_Log_Analytics_Signature": ["Succeeded"]
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_Audit_Content": ["Succeeded"]
+                            }
+                        }
+                    }
+                }
+            },
+            "runAfter": {
+                "Get_Copilot_Audit_Logs": ["Succeeded"]
+            },
+            "else": {
+                "actions": {
+                    "Log_No_Data_Found": {
+                        "type": "Compose",
+                        "inputs": {
+                            "message": "No Copilot audit logs found for the specified time range",
+                            "startTime": "@variables('StartTime')",
+                            "endTime": "@variables('EndTime')"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "outputs": {}
+}

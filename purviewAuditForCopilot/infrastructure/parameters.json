@@ -1,0 +1,33 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logicAppName": {
+            "value": "copilot-audit-ingestion"
+        },
+        "location": {
+            "value": "East US"
+        },
+        "tenantId": {
+            "value": "your-tenant-id"
+        },
+        "workspaceResourceId": {
+            "value": "/subscriptions/your-subscription-id/resourceGroups/your-rg/providers/Microsoft.OperationalInsights/workspaces/your-workspace"
+        },
+        "workspaceId": {
+            "value": "your-workspace-guid"
+        },
+        "workspaceKey": {
+            "value": "your-workspace-key"
+        },
+        "recurrenceFrequency": {
+            "value": "Hour"
+        },
+        "recurrenceInterval": {
+            "value": 1
+        },
+        "enableSystemAssignedIdentity": {
+            "value": true
+        }
+    }
+}
