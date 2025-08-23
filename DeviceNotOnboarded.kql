@@ -1,5 +1,5 @@
 AlertInfo
-| where <add some filter here for a certain alert>
+| where TimeGenerated <=  ago(3d)
 | join AlertEvidence on $left.AlertId == $right.AlertId
 | join (DeviceInfo | where OnboardingStatus != "Onboarded") on $left.DeviceId == $right.DeviceId
 //assumption is not-onboarded devices are not secured and as such we'd like to see that seperately 
