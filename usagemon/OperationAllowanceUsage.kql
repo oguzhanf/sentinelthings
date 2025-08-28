@@ -1,0 +1,33 @@
+// Query to show allowance usage from the Operation table
+// Based on Microsoft documentation: tracks benefits from Defender for Servers and Microsoft Sentinel M365 benefits
+// Shows daily benefit usage for data allowances
+
+Operation
+| where TimeGenerated >= ago(31d)
+| where Detail startswith "Benefit amount used"
+| parse Detail with "Benefit amount used: " BenefitUsedGB " GB"
+| extend BenefitUsedGB = toreal(BenefitUsedGB)
+| parse OperationKey with "Benefit type used: " BenefitType 
+| project 
+    BillingDay = format_datetime(TimeGenerated, "yyyy-MM-dd"),
+    BenefitType, 
+    BenefitUsedGB = round(BenefitUsedGB, 3)
+| sort by BillingDay desc, BenefitType asc
+
+// Alternative view: Summary by benefit type over the last 31 days
+// Operation
+// | where TimeGenerated >= ago(31d)
+// | where Detail startswith "Benefit amount used"
+// | parse Detail with "Benefit amount used: " BenefitUsedGB " GB"
+// | extend BenefitUsedGB = toreal(BenefitUsedGB)
+// | parse OperationKey with "Benefit type used: " BenefitType 
+// | summarize 
+//     TotalBenefitUsedGB = sum(BenefitUsedGB),
+//     DaysWithBenefit = dcount(bin(TimeGenerated, 1d)),
+//     AvgDailyBenefitGB = avg(BenefitUsedGB)
+//     by BenefitType
+// | project 
+//     BenefitType,
+//     TotalBenefitUsedGB = round(TotalBenefitUsedGB, 2),
+//     DaysWithBenefit,
+//     AvgDailyBenefitGB = round(AvgDailyBenefitGB, 3)

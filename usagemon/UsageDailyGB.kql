@@ -1,0 +1,7 @@
+// Daily usage in GB from the Usage table
+// Shows total data ingestion per day without breakdown of billed vs unbilled
+Usage
+| where TimeGenerated >= ago(30d)
+| summarize TotalUsageGB = sum(Quantity) / 1024 by bin(TimeGenerated, 1d)
+| sort by TimeGenerated desc
+| project Date = format_datetime(TimeGenerated, "yyyy-MM-dd"), TotalUsageGB = round(TotalUsageGB, 2)
