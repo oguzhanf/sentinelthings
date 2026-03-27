@@ -288,24 +288,18 @@ if ($dcrRaw) {
 }
 Write-Host "    Data Collection Rules: $($dcrResults.Count)" -ForegroundColor Gray
 
-# 4) Fetch Diagnostic Settings sending to this workspace via Resource Graph
-Write-Host "  Fetching Diagnostic Settings targeting this workspace..." -ForegroundColor Gray
-$diagQuery = @{
-    query   = "resourcecontainers | union resources | where type != 'microsoft.insights/datacollectionrules' | mv-expand d = properties.diagnosticSettings | where isnotempty(d)"
-    options = @{ resultFormat = "objectArray" }
-} | ConvertTo-Json -Compress -Depth 5
-
-# Diagnostic settings are not easily queried via Resource Graph across all resource types.
-# Instead, list them via the workspace's linked resources.
-$diagSettings = @()
-$linkedResources = az rest --method get `
-    --url "https://management.azure.com/subscriptions/$subId/resourceGroups/$selectedRgName/providers/Microsoft.OperationalInsights/workspaces/$selectedWsName/linkedServices?api-version=2020-08-01" -o json 2>$null | ConvertFrom-Json
-$linkedCount = 0
-if ($linkedResources) {
-    $valProp = $linkedResources.PSObject.Properties | Where-Object { $_.Name -eq 'value' }
-    if ($valProp) { $linkedCount = @($valProp.Value).Count }
-}
-Write-Host "    Linked services: $linkedCount" -ForegroundColor Gray
+# 5) Fetch Content Hub content templates of kind DataConnector / ResourcesDataConnector
+#    These represent ALL connector pages shown in the Sentinel portal
+Write-Host "  Fetching Content Hub connector templates..." -ForegroundColor Gray
+$connectorTemplates = @(Get-AllPages "$apiBase/contentTemplates?api-version=$apiVersion")
+$dcTemplates = @($connectorTemplates | Where-Object {
+    $templateProps = Get-SafeProp $_ 'properties' $null
+    if ($templateProps) {
+        $ck = Get-SafeProp $templateProps 'contentKind' ''
+        $ck -eq 'DataConnector' -or $ck -eq 'ResourcesDataConnector'
+    } else { $false }
+})
+Write-Host "    Connector templates (from Content Hub): $($dcTemplates.Count)" -ForegroundColor Gray
 
 # Build a lookup of explicit connectors by connectorDefinitionName (for cross-referencing)
 $explicitByDefName = @{}
@@ -534,6 +528,62 @@ foreach ($dcr in $dcrResults) {
     }
 }
 
+# ── Build report from CONTENT HUB CONNECTOR TEMPLATES ──
+# These are the connector pages visible in the Sentinel portal from installed solutions.
+# Only add ones not already covered by explicit data connectors or connector definitions.
+$existingNames = @{}
+foreach ($r in $report) { $existingNames[$r.ConnectorName] = $true }
+
+foreach ($tmpl in $dcTemplates) {
+    $tmplProps = Get-SafeProp $tmpl 'properties' $null
+    if (-not $tmplProps) { continue }
+
+    $displayName = Get-SafeProp $tmplProps 'displayName' ''
+    if (-not $displayName) { $displayName = Get-SafeProp $tmpl 'name' '' }
+
+    # Skip if already in report by name
+    if ($existingNames.ContainsKey($displayName)) { continue }
+
+    $contentKind = Get-SafeProp $tmplProps 'contentKind' ''
+    $sourceObj   = Get-SafeProp $tmplProps 'source' $null
+    $sourceKind  = if ($sourceObj) { Get-SafeProp $sourceObj 'kind' '' } else { '' }
+    $sourceName  = if ($sourceObj) { Get-SafeProp $sourceObj 'name' '' } else { '' }
+
+    # Determine status: if it has contentId that matches an explicit connector, it's Connected
+    $contentId   = Get-SafeProp $tmplProps 'contentId' ''
+    $isConnected = $false
+    foreach ($dc in $dataConnectors) {
+        $dcKind = Get-SafeProp $dc 'kind' ''
+        if ($dcKind -and $displayName -match [regex]::Escape($dcKind)) { $isConnected = $true; break }
+    }
+
+    $existingNames[$displayName] = $true
+
+    $lookup = $complexityMap.Keys | Where-Object { $displayName -match [regex]::Escape($_) } | Select-Object -First 1
+    $complexity = 'Medium'
+    $notes = "Content Hub solution connector. Install '$sourceName' solution and configure."
+    if ($lookup) {
+        $complexity = $complexityMap[$lookup].Complexity
+        $notes = $complexityMap[$lookup].Notes
+    }
+
+    $report += [PSCustomObject]@{
+        ConnectorName     = $displayName
+        Kind              = $contentKind
+        Source            = 'ContentHubTemplate'
+        Status            = if ($isConnected) { 'Connected' } else { 'Installed' }
+        DataTypeStates    = ''
+        ConnectorId       = $contentId
+        TenantId          = ''
+        Complexity        = $complexity
+        MigrationNotes    = $notes
+        ResourceGroup     = $selectedRgName
+        Workspace         = $selectedWsName
+        Subscription      = $selectedSentinel.subscriptionName
+        FullResourceId    = Get-SafeProp $tmpl 'id' ''
+    }
+}
+
 if ($report.Count -eq 0) {
     Write-Host "`n  No data connectors found in workspace '$selectedWsName'." -ForegroundColor Yellow
     exit 0
@@ -555,6 +605,7 @@ $installedCount    = @($report | Where-Object { $_.Status -eq 'Installed' }).Cou
 $notConnectedCount = @($report | Where-Object { $_.Status -eq 'Not Connected' }).Count
 $dcCount           = @($report | Where-Object { $_.Source -eq 'DataConnector' }).Count
 $chCount           = @($report | Where-Object { $_.Source -eq 'ContentHub' }).Count
+$chtCount          = @($report | Where-Object { $_.Source -eq 'ContentHubTemplate' }).Count
 $dcrCount          = @($report | Where-Object { $_.Source -eq 'DataCollectionRule' }).Count
 $grouped = $report | Group-Object Complexity
 
@@ -562,9 +613,10 @@ Write-Host ""
 Write-Host "  ============================================================" -ForegroundColor Cyan
 Write-Host "    Migration Assessment Summary" -ForegroundColor Cyan
 Write-Host "  ============================================================" -ForegroundColor Cyan
-Write-Host "    Data Connector resources:  $dcCount" -ForegroundColor White
-Write-Host "    Content Hub definitions:   $chCount" -ForegroundColor White
-Write-Host "    Data Collection Rules:     $dcrCount" -ForegroundColor White
+Write-Host "    Data Connector resources:    $dcCount" -ForegroundColor White
+Write-Host "    Content Hub definitions:     $chCount" -ForegroundColor White
+Write-Host "    Content Hub templates:       $chtCount" -ForegroundColor White
+Write-Host "    Data Collection Rules:       $dcrCount" -ForegroundColor White
 Write-Host ""
 Write-Host "    Connected:       $connectedCount" -ForegroundColor Green
 Write-Host "    Installed:       $installedCount (definition present, needs configuration)" -ForegroundColor Yellow
