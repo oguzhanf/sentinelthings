@@ -1,0 +1,182 @@
+Syslog
+| where SyslogMessage contains "arbor-networks-aps" or SyslogMessage contains "client"
+| extend LogType = case(
+    SyslogMessage contains "arbor-networks-aps:Blocked Host:", "ArborBlocked",
+    SyslogMessage contains "client", "DNSQuery",
+    "Other"
+)
+// Parse Arbor Blocked Host logs
+| extend 
+    BlockedIP = case(
+        LogType == "ArborBlocked", 
+        extract(@"Blocked host ([0-9\.]+)", 1, SyslogMessage),
+        ""
+    ),
+    BlockTime = case(
+        LogType == "ArborBlocked",
+        extract(@"at ([0-9:]+)", 1, SyslogMessage),
+        ""
+    ),
+    BlockReason = case(
+        LogType == "ArborBlocked",
+        extract(@"by ([^u]+) using", 1, SyslogMessage),
+        ""
+    ),
+    Protocol = case(
+        LogType == "ArborBlocked",
+        extract(@"using ([A-Z]+)", 1, SyslogMessage),
+        LogType == "DNSQuery",
+        extract(@"view \d+: ([A-Z]+):", 1, SyslogMessage),
+        ""
+    ),
+    DestinationPort = case(
+        LogType == "ArborBlocked",
+        extract(@"using [A-Z]+/(\d+)", 1, SyslogMessage),
+        ""
+    ),
+    PortName = case(
+        LogType == "ArborBlocked",
+        extract(@"\(([^)]+)\)", 1, SyslogMessage),
+        ""
+    ),
+    DestinationIP = case(
+        LogType == "ArborBlocked",
+        extract(@"destination ([0-9\.]+)", 1, SyslogMessage),
+        ""
+    ),
+    SourcePort = case(
+        LogType == "ArborBlocked",
+        extract(@"source port (\d+)", 1, SyslogMessage),
+        ""
+    ),
+    ELID = case(
+        LogType == "ArborBlocked",
+        extract(@"ELID: (\d+)", 1, SyslogMessage),
+        ""
+    ),
+    ThreatName = case(
+        LogType == "ArborBlocked",
+        extract(@"THREAT_NAME: ([^,]+)", 1, SyslogMessage),
+        ""
+    ),
+    ThreatCategory = case(
+        LogType == "ArborBlocked",
+        extract(@"THREAT_CATEGORY: ([^,]+)", 1, SyslogMessage),
+        ""
+    ),
+    Pattern = case(
+        LogType == "ArborBlocked",
+        extract(@"PATTERN: ([^,]+)", 1, SyslogMessage),
+        ""
+    ),
+    Epoch = case(
+        LogType == "ArborBlocked",
+        extract(@"EPOCH: (\d+)", 1, SyslogMessage),
+        ""
+    ),
+    PGID = case(
+        LogType == "ArborBlocked",
+        extract(@"PGID: (\d+)", 1, SyslogMessage),
+        ""
+    ),
+    ProtectionGroupName = case(
+        LogType == "ArborBlocked",
+        extract(@"PGNAME: ([^,]+)", 1, SyslogMessage),
+        ""
+    ),
+    MatchType = case(
+        LogType == "ArborBlocked",
+        extract(@"MATCH_TYPE: ([^,]+)", 1, SyslogMessage),
+        ""
+    ),
+    URL = case(
+        LogType == "ArborBlocked",
+        extract(@"URL: ([^,\s]+)", 1, SyslogMessage),
+        ""
+    )
+// Parse DNS Query logs
+| extend 
+    ClientIP = case(
+        LogType == "DNSQuery",
+        extract(@"client ([0-9\.]+)#", 1, SyslogMessage),
+        ""
+    ),
+    ClientPort = case(
+        LogType == "DNSQuery",
+        extract(@"client [0-9\.]+#(\d+)", 1, SyslogMessage),
+        ""
+    ),
+    QueryDomain = case(
+        LogType == "DNSQuery" and SyslogMessage contains "query:",
+        extract(@"query: ([^\s]+)", 1, SyslogMessage),
+        ""
+    ),
+    QueryType = case(
+        LogType == "DNSQuery" and SyslogMessage contains "query:",
+        extract(@"query: [^\s]+ IN ([A-Z]+)", 1, SyslogMessage),
+        ""
+    ),
+    ResponseCode = case(
+        LogType == "DNSQuery" and SyslogMessage contains "response:",
+        extract(@"response: ([A-Z]+)", 1, SyslogMessage),
+        ""
+    ),
+    ViewNumber = case(
+        LogType == "DNSQuery",
+        extract(@"view (\d+):", 1, SyslogMessage),
+        ""
+    ),
+    DNSServerIP = case(
+        LogType == "DNSQuery" and SyslogMessage contains "(",
+        extract(@"\(([0-9\.]+)\)", 1, SyslogMessage),
+        ""
+    )
+// Convert data types
+| extend 
+    BlockedIPParsed = parse_ipv4(BlockedIP),
+    DestinationIPParsed = parse_ipv4(DestinationIP),
+    ClientIPParsed = parse_ipv4(ClientIP),
+    DNSServerIPParsed = parse_ipv4(DNSServerIP),
+    DestinationPortInt = toint(DestinationPort),
+    SourcePortInt = toint(SourcePort),
+    ClientPortInt = toint(ClientPort),
+    EpochTime = todatetime(1970-01-01) + totimespan(tolong(Epoch) * 1s)
+// Clean up empty fields and project final columns
+| project 
+    TimeGenerated,
+    LogType,
+    // Arbor Blocked Host fields
+    BlockedIP = iff(BlockedIP == "", dynamic(null), BlockedIP),
+    BlockedIPParsed = iff(isempty(BlockedIPParsed), dynamic(null), BlockedIPParsed),
+    BlockTime,
+    BlockReason,
+    DestinationIP = iff(DestinationIP == "", dynamic(null), DestinationIP),
+    DestinationIPParsed = iff(isempty(DestinationIPParsed), dynamic(null), DestinationIPParsed),
+    DestinationPort = iff(DestinationPort == "", dynamic(null), DestinationPort),
+    DestinationPortInt = iff(isempty(DestinationPortInt), dynamic(null), DestinationPortInt),
+    PortName = iff(PortName == "", dynamic(null), PortName),
+    SourcePort = iff(SourcePort == "", dynamic(null), SourcePort),
+    SourcePortInt = iff(isempty(SourcePortInt), dynamic(null), SourcePortInt),
+    Protocol = iff(Protocol == "", dynamic(null), Protocol),
+    ThreatName = iff(ThreatName == "", dynamic(null), ThreatName),
+    ThreatCategory = iff(ThreatCategory == "", dynamic(null), ThreatCategory),
+    Pattern = iff(Pattern == "", dynamic(null), Pattern),
+    ProtectionGroupName = iff(ProtectionGroupName == "", dynamic(null), ProtectionGroupName),
+    PGID = iff(PGID == "", dynamic(null), PGID),
+    ELID = iff(ELID == "", dynamic(null), ELID),
+    MatchType = iff(MatchType == "", dynamic(null), MatchType),
+    EpochTime = iff(isempty(EpochTime), dynamic(null), EpochTime),
+    URL = iff(URL == "", dynamic(null), URL),
+    // DNS Query fields
+    ClientIP = iff(ClientIP == "", dynamic(null), ClientIP),
+    ClientIPParsed = iff(isempty(ClientIPParsed), dynamic(null), ClientIPParsed),
+    ClientPort = iff(ClientPort == "", dynamic(null), ClientPort),
+    ClientPortInt = iff(isempty(ClientPortInt), dynamic(null), ClientPortInt),
+    QueryDomain = iff(QueryDomain == "", dynamic(null), QueryDomain),
+    QueryType = iff(QueryType == "", dynamic(null), QueryType),
+    ResponseCode = iff(ResponseCode == "", dynamic(null), ResponseCode),
+    ViewNumber = iff(ViewNumber == "", dynamic(null), ViewNumber),
+    DNSServerIP = iff(DNSServerIP == "", dynamic(null), DNSServerIP),
+    DNSServerIPParsed = iff(isempty(DNSServerIPParsed), dynamic(null), DNSServerIPParsed),
+    // Original message for reference
+    SyslogMessage

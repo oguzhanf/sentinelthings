@@ -1,0 +1,133 @@
+Syslog
+| where ProcessName = "filterlog"
+| extend ParsedField = split(SyslogMessage, ',')
+| extend ruleId = ParsedField[0]
+| extend subRuleId = ParsedField[3]
+| extend inputInterface = ParsedField[4]
+| extend reason = ParsedField[5]
+| extend action = ParsedField[6]
+| extend direction = ParsedField[7]
+| extend ipVersion = ParsedField[8]
+| extend proto_start =iff(ipVersion == 4, 20,17)
+| extend isIpProtocol = iff(ipVersion == 4 or ipVersion == 6, true, false)
+//v4
+| extend tos = iff(ipVersion == 4, ParsedField[9],int(null))
+| extend ecn=iff(ipVersion == 4,  ParsedField[10],int(null))
+| extend hop_limit4 = iff(ipVersion == 4, ParsedField[11],int(null))
+| extend aid = iff(ipVersion == 4, ParsedField[12],int(null))
+| extend protoOffset = iff(ipVersion == 4, ParsedField[13],int(null))
+| extend ip4flags = iff(ipVersion == 4, ParsedField[14],int(null))
+| extend protocol_id4 = iff(ipVersion == 4, ParsedField[15],int(null))
+| extend protocol4 = iff(ipVersion == 4, ParsedField[16],"")
+| extend length4 = iff(ipVersion == 4, ParsedField[17],int(null))
+| extend sourceV4 = iff(ipVersion == 4, ParsedField[18],int(null))
+| extend destinationV6 = iff(ipVersion == 4, ParsedField[19],int(null))
+//V6
+| extend klass6 = iff(ipVersion ==6, ParsedField[9], int(null))
+| extend flow_label6 = iff(ipVersion ==6,ParsedField[10], int(null))
+| extend hop_limit6 = iff(ipVersion ==6,ParsedField[11], int(null))
+| extend protocol6 = iff(ipVersion ==6,ParsedField[12], "")
+| extend protocolId6 =iff(ipVersion ==6, ParsedField[13], int(null))
+| extend length6 = iff(ipVersion ==6,ParsedField[14], int(null))
+| extend sourceV6 = iff(ipVersion ==6,ParsedField[15], int(null))
+| extend destionationV6= iff(ipVersion ==6,ParsedField[16], int(null))
+//tcpUdp
+| extend sPort = 
+iff //is ip protocol check
+(
+    isIpProtocol,
+    iff(
+        ipVersion == 4, //this is fine as there is an ip protocol check above values will be 4 and 6 only
+        iff(protocol4=~"tcp"or protocol4 =~ "udp",ParsedField[proto_start],int(null)), //read protocol4 which is at index 16
+        iff(protocol6=~"tcp"or protocol6 =~ "udp",ParsedField[proto_start],int(null))  //read protocol6 index 12
+    ),    
+    int(null)
+)
+| extend dPort = 
+iff //is ip protocol check
+(
+    isIpProtocol,
+    iff(
+        ipVersion == 4, //this is fine as there is an ip protocol check above values will be 4 and 6 only
+        iff(protocol4=~"tcp"or protocol4 =~ "udp",ParsedField[proto_start+1],int(null)), //read protocol4 which is at index 16
+        iff(protocol6=~"tcp"or protocol6 =~ "udp",ParsedField[proto_start+1],int(null))  //read protocol6 index 12
+    ),    
+    int(null)
+)    
+| extend tcpUdpLength = 
+iff //is ip protocol check
+(
+    isIpProtocol,
+    iff(
+        ipVersion == 4, //this is fine as there is an ip protocol check above values will be 4 and 6 only
+        iff(protocol4=~"tcp"or protocol4 =~ "udp",ParsedField[proto_start+2],int(null)), //read protocol4 which is at index 16
+        iff(protocol6=~"tcp"or protocol6 =~ "udp",ParsedField[proto_start+2],int(null))  //read protocol6 index 12
+    ),    
+    int(null)
+)
+| extend tcpFlags = 
+iff //is ip protocol check
+(
+    isIpProtocol,
+    iff(
+        ipVersion == 4, //this is fine as there is an ip protocol check above values will be 4 and 6 only
+        iff(protocol4=~"tcp",ParsedField[proto_start+3],int(null)), //read protocol4 which is at index 16
+        iff(protocol6=~"tcp",ParsedField[proto_start+3],int(null))  //read protocol6 index 12
+    ),    
+    int(null)
+)
+| extend seqNum = 
+iff //is ip protocol check
+(
+    isIpProtocol,
+    iff(
+        ipVersion == 4, //this is fine as there is an ip protocol check above values will be 4 and 6 only
+        iff(protocol4=~"tcp",ParsedField[proto_start+4],int(null)), //read protocol4 which is at index 16
+        iff(protocol6=~"tcp",ParsedField[proto_start+4],int(null))  //read protocol6 index 12
+    ),    
+    int(null)
+)
+| extend ackNum = 
+iff //is ip protocol check
+(
+    isIpProtocol,
+    iff(
+        ipVersion == 4, //this is fine as there is an ip protocol check above values will be 4 and 6 only
+        iff(protocol4=~"tcp",ParsedField[proto_start+5],int(null)), //read protocol4 which is at index 16
+        iff(protocol6=~"tcp",ParsedField[proto_start+5],int(null))  //read protocol6 index 12
+    ),    
+    int(null)
+)
+| extend wSize = 
+iff //is ip protocol check
+(
+    isIpProtocol,
+    iff(
+        ipVersion == 4, //this is fine as there is an ip protocol check above values will be 4 and 6 only
+        iff(protocol4=~"tcp",ParsedField[proto_start+6],int(null)), //read protocol4 which is at index 16
+        iff(protocol6=~"tcp",ParsedField[proto_start+6],int(null))  //read protocol6 index 12
+    ),    
+    int(null)
+)
+| extend pUrgent = 
+iff //is ip protocol check
+(
+    isIpProtocol,
+    iff(
+        ipVersion == 4, //this is fine as there is an ip protocol check above values will be 4 and 6 only
+        iff(protocol4=~"tcp",ParsedField[proto_start+7],int(null)), //read protocol4 which is at index 16
+        iff(protocol6=~"tcp",ParsedField[proto_start+7],int(null))  //read protocol6 index 12
+    ),    
+    int(null)
+)
+| extend tcpOpts = 
+iff //is ip protocol check
+(
+    isIpProtocol,
+    iff(
+        ipVersion == 4, //this is fine as there is an ip protocol check above values will be 4 and 6 only
+        iff(protocol4=~"tcp",ParsedField[proto_start+7],""), //read protocol4 which is at index 16
+        iff(protocol6=~"tcp",ParsedField[proto_start+7],"")  //read protocol6 index 12
+    ),    
+    ""
+)

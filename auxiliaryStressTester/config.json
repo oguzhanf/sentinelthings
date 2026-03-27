@@ -1,0 +1,41 @@
+{
+    "subscriptionId": "YOUR_SUBSCRIPTION_ID_HERE",
+    "resourceGroupName": "YOUR_RESOURCE_GROUP_NAME",
+    "workspaceName": "YOUR_WORKSPACE_NAME",
+    "location": "East US",
+    "tableName": "AuxiliaryTestData_CL",
+    "testDataSettings": {
+        "recordCount": 50,
+        "timeRangeMinutes": 60,
+        "eventTypes": [
+            "Login",
+            "Logout", 
+            "FileAccess",
+            "NetworkConnection",
+            "SystemAlert",
+            "DataExport",
+            "ConfigChange",
+            "SecurityScan"
+        ],
+        "users": [
+            "john.doe",
+            "jane.smith",
+            "bob.wilson",
+            "alice.brown",
+            "charlie.davis",
+            "david.jones",
+            "emma.taylor",
+            "frank.miller"
+        ],
+        "sourceSystems": [
+            "WebApp",
+            "MobileApp",
+            "Desktop",
+            "API",
+            "Service",
+            "Database",
+            "FileServer",
+            "EmailSystem"
+        ]
+    }
+}

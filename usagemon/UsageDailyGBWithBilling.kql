@@ -1,0 +1,15 @@
+// Daily usage in GB from the Usage table with billable vs non-billable breakdown
+// Shows total data ingestion per day split by billing status
+Usage
+| where TimeGenerated >= ago(30d)
+| summarize 
+    BillableGB = sum(iif(IsBillable == true, Quantity, 0)) / 1024,
+    NonBillableGB = sum(iif(IsBillable == false, Quantity, 0)) / 1024,
+    TotalUsageGB = sum(Quantity) / 1024
+    by bin(TimeGenerated, 1d)
+| sort by TimeGenerated desc
+| project 
+    Date = format_datetime(TimeGenerated, "yyyy-MM-dd"), 
+    BillableGB = round(BillableGB, 2),
+    NonBillableGB = round(NonBillableGB, 2),
+    TotalUsageGB = round(TotalUsageGB, 2)
