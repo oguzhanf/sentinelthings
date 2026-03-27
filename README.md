@@ -88,17 +88,6 @@ Located in `purviewAuditForCopilot/`. An Azure Functions (v4, .NET 8) project th
 
 The KQL queries (`.kql` files) are meant to be run directly in the Log Analytics query editor or within Sentinel workbooks.
 
-## Suggestions for Future Additions
-
-Below are tools and queries that would complement the existing collection:
-
-- **Sentinel Incident Exporter** -- a script to export Sentinel incidents (with alerts, entities, and comments) to CSV or JSON for offline analysis and reporting.
-- **Watchlist Manager** -- a script to bulk-create, update, or delete Sentinel watchlists and their items from CSV files.
-- **Analytics Rule Health Check** -- a KQL query or script that identifies disabled, misconfigured, or never-triggered analytics rules in a workspace.
-- **Data Connector Health Dashboard** -- a KQL workbook query that checks connector last-log-received timestamps and flags stale or broken connectors.
-- **Automation Rule / Playbook Inventory** -- a script to list all automation rules and their linked playbooks, showing enabled state and last-triggered time.
-- **Workspace Cost Forecast** -- a KQL query joining `Usage` with `Operation` to project 30-day cost trends and alert when ingestion exceeds a threshold.
-
 ## License
 
 This repository is provided as-is for internal use. No warranty is expressed or implied.
