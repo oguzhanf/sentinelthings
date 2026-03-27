@@ -1,5 +1,5 @@
 Syslog
-| where ProcessName = "filterlog"
+| where ProcessName == "filterlog"
 | extend ParsedField = split(SyslogMessage, ',')
 | extend ruleId = ParsedField[0]
 | extend subRuleId = ParsedField[3]
@@ -21,7 +21,7 @@ Syslog
 | extend protocol4 = iff(ipVersion == 4, ParsedField[16],"")
 | extend length4 = iff(ipVersion == 4, ParsedField[17],int(null))
 | extend sourceV4 = iff(ipVersion == 4, ParsedField[18],int(null))
-| extend destinationV6 = iff(ipVersion == 4, ParsedField[19],int(null))
+| extend destinationV4 = iff(ipVersion == 4, ParsedField[19],int(null))
 //V6
 | extend klass6 = iff(ipVersion ==6, ParsedField[9], int(null))
 | extend flow_label6 = iff(ipVersion ==6,ParsedField[10], int(null))

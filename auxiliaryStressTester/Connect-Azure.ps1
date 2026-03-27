@@ -27,7 +27,7 @@ try {
     $account = Connect-AzAccount -UseDeviceAuthentication -SubscriptionId $SubscriptionId
     
     if ($account) {
-        Write-Host "`n✅ Successfully authenticated!" -ForegroundColor Green
+        Write-Host "`nSuccessfully authenticated!" -ForegroundColor Green
         Write-Host "Account: $($account.Context.Account.Id)" -ForegroundColor Cyan
         Write-Host "Subscription: $($account.Context.Subscription.Name)" -ForegroundColor Cyan
         Write-Host "Tenant: $($account.Context.Tenant.Id)" -ForegroundColor Cyan
@@ -35,14 +35,14 @@ try {
         # Set the context
         Set-AzContext -SubscriptionId $SubscriptionId | Out-Null
         
-        Write-Host "`n🎉 You're now ready to run the Sentinel automation scripts!" -ForegroundColor Green
+        Write-Host "`nYou're now ready to run the Sentinel automation scripts!" -ForegroundColor Green
         Write-Host "This authentication will persist for this PowerShell session." -ForegroundColor Yellow
     } else {
-        Write-Host "❌ Authentication failed" -ForegroundColor Red
+        Write-Host "Authentication failed" -ForegroundColor Red
         exit 1
     }
 }
 catch {
-    Write-Host "❌ Error during authentication: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Error during authentication: $($_.Exception.Message)" -ForegroundColor Red
     exit 1
 }

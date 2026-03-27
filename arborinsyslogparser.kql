@@ -140,7 +140,7 @@ Syslog
     DestinationPortInt = toint(DestinationPort),
     SourcePortInt = toint(SourcePort),
     ClientPortInt = toint(ClientPort),
-    EpochTime = todatetime(1970-01-01) + totimespan(tolong(Epoch) * 1s)
+    EpochTime = todatetime('1970-01-01') + totimespan(tolong(Epoch) * 1s)
 // Clean up empty fields and project final columns
 | project 
     TimeGenerated,
